@@ -61,9 +61,9 @@ int main()
     while(1)                                                    // Interacting like a shell with user
     {
         len = 0;
-        printf("Enter command : \n");
+        printf("Enter command > ");
         cnt = getline(&temp_buf, &len, stdin);                  // Taking command as input from user
-        printf("%d\n", cnt);
+        // printf("%d\n", cnt);
         for(int i = 0; i < cnt-1; i++)
         buffer[i] = temp_buf[i];
         buffer[cnt-1] = '\0';
@@ -107,7 +107,7 @@ int main()
             if(buffer[idx-1] == '\0')
             break;
         }
-        printf("Result from server : %s %d\n", buffer, (int)strlen(buffer));
+        // printf("Result from server : %s %d\n", buffer, (int)strlen(buffer));
         if(strcmp(buffer, "####") == 0)
         printf("Error in running command...\n");
         else if(strcmp(buffer, "$$$$") == 0)
