@@ -9,135 +9,115 @@
 
 const int MAXSIZE = 250, CHUNKSIZE = 50;
 
-char* handle_pwd()
+int findMin(int a, int b)
 {
-    return "pwd";
-}
-
-char* handle_dir(char* argument)
-{
-    return "dir";
-}
-
-char* handle_cd(char* argument)
-{
-    return "cd";
+    return (a < b) ? a : b;
 }
 
 int main()
-{
-    int sockfd, newsockfd;                                                  // socket descriptors
-    struct sockaddr_in servAddr, cliAddr;
-    char* buffer = (char*)malloc(MAXSIZE*sizeof(char));                     // buffer for taking input from user
-    
+{       
+    int sockfd;                                                  // socket descriptor
+    struct sockaddr_in servAddr;
+    char* buffer = (char*)malloc(MAXSIZE*sizeof(char));          // buffer for taking input from user
+
     if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         printf("Error in creating socket!\n");
         exit(0);
-    }
+    }   
 
     servAddr.sin_family = AF_INET;
-    servAddr.sin_port = htons(20000);                                       // changing it to network byte order
+    servAddr.sin_port = htons(20000);                            // converting to network byte order
     inet_aton("127.0.0.1", &servAddr.sin_addr);
-    
-    if(bind(sockfd, (struct sockaddr* )&servAddr, sizeof(servAddr)) < 0)
+
+    if(connect(sockfd, (struct sockaddr* )&servAddr, sizeof(servAddr)) < 0)
     {
-        printf("Error in binding!\n");
+        printf("Error in connecting!\n");
+        exit(0);
+    }
+    printf("Connected to server...\n");
+
+    int temp;
+    temp = recv(sockfd, buffer, sizeof(buffer), 0);
+    if(temp <= 0)                                               // if server socket gets closed or some error in recv
+    {
+        printf("Error in receiving message from server...\n");
         exit(0);
     }
 
-    listen(sockfd, 5);                                                      // Atmost 5 clients can be queued while server is running
+    printf("%s ", buffer);                                      // print "LOGIN:"
+    scanf("%s", buffer); getchar();                                    // Taking username as input
+    buffer[strlen(buffer)] = '\0';
+    temp = send(sockfd, buffer, strlen(buffer)+1, 0);           // Sending username to server 
+    temp = recv(sockfd, buffer, MAXSIZE, 0);                    // Receiving verification message from server
 
-    int cliLength, temp, idx, cnt; char validUser;
-    char* temp_buf = (char*)malloc(CHUNKSIZE * sizeof(char));
-    char* result;
-    while(1)
+    if(strcmp(buffer, "NOT-FOUND") == 0)  
     {
-        if((newsockfd = accept(sockfd, (struct sockaddr* )&cliAddr, &cliLength)) < 0)
+        printf("Invalid Username!\n");
+        exit(0);
+    }       
+
+    char* temp_buf; int cnt, totalSent, idx; size_t len;
+    while(1)                                                    // Interacting like a shell with user
+    {
+        len = 0;
+        printf("Enter command > ");
+        cnt = getline(&temp_buf, &len, stdin);                  // Taking command as input from user
+        // printf("%d\n", cnt);
+        for(int i = 0; i < cnt-1; i++)
+        buffer[i] = temp_buf[i];
+        buffer[cnt-1] = '\0';
+        free(temp_buf);
+
+        for(int i = 0; i < 5; i++)                              // Sending a chunk of 50 bytes in each iteration
         {
-            printf("Error in accepting\n");
-            exit(0);
-        }
-
-        if(fork() == 0)                                                     // Child process will interact with client & parent process is still there to accept from other clients 
+            if(i*CHUNKSIZE >= cnt)                              // Checking if we have already sent the whole buffer in prev iteration
+            break;  
+            totalSent = 0;
+            while(1)                                            // Loop for sending expression to server
+            {
+                temp = send(sockfd, buffer+totalSent+CHUNKSIZE*i, findMin(CHUNKSIZE, cnt-i*CHUNKSIZE)-totalSent, 0);
+                totalSent += temp;
+                if(totalSent == findMin(CHUNKSIZE, cnt-i*CHUNKSIZE))                       // Keep sending until total no. of char sent become equal to cntChars
+                break;
+            }
+        }  
+        
+        if(strcmp(buffer, "exit") == 0)
         {
-            strcpy(buffer, "LOGIN:");
-            temp = send(newsockfd, buffer, strlen(buffer)+1, 0);            // Sending Login message
-            temp = recv(newsockfd, buffer, MAXSIZE, 0);                     // Receiving username from client
-            printf("Username received from client : %s\n", buffer);
-
-            validUser = 'f'; 
-            FILE *fileptr = fopen("users.txt", "r");
-            if(fileptr == NULL)
-            {
-                printf("Error in opening users.txt\n");
-                exit(0);
-            }
-
-            while(fgets(temp_buf, MAXSIZE, fileptr) != NULL)                // Checking whether username is valid or not
-            {
-                temp_buf[strcspn(temp_buf, " \t\n")] = '\0';
-                // printf("%s %d\n", temp_buf, (int)strlen(temp_buf));
-                printf("%d %s %s\n", strcmp(temp_buf, buffer), temp_buf, buffer);
-                if(strcmp(temp_buf, buffer) == 0)
-                {
-                    validUser = 't';
-                    break;
-                }
-            }
-            fclose(fileptr);
-            if(validUser == 'f')
-            {
-                strcpy(buffer, "NOT-FOUND");
-                temp = send(newsockfd, buffer, strlen(buffer)+1, 0);
-                exit(0);
-            }
-            strcpy(buffer, "FOUND");
-            temp = send(newsockfd, buffer, strlen(buffer)+1, 0);            
-
-            while(1)
-            {
-                idx = 0;
-                while(1)                                                        // For receiving command from client
-                {
-                    cnt = recv(newsockfd, temp_buf, CHUNKSIZE, 0);
-                    printf("%d\n", cnt);
-                    if(cnt <= 0)                                                // if client socket gets closed or some error in recv
-                    {
-                        printf("Error in receiving command from client...\n");
-                        exit(0);
-                    }
-
-                    for(int i = 0; i < cnt; i++)
-                    buffer[idx++] = temp_buf[i];
-
-                    if(buffer[idx-1] == '\0')
-                    break;
-                }
-                printf("Command received from client : %s %d\n", buffer, (int)strlen(buffer));
-
-                if(strcmp(buffer, "exit") == 0)
-                {
-                    printf("Bye!\n");
-                    break;
-                }
-                else if(strlen(buffer) == 3 && buffer[0] == 'p' && buffer[1] == 'w' && buffer[2] == 'd')
-                result = handle_pwd();
-                else if(strlen(buffer) >= 3 && buffer[0] == 'd' && buffer[1] == 'i' && buffer[2] == 'r')
-                result = handle_dir(buffer+3);
-                else if(strlen(buffer) >= 2 && buffer[0] == 'c' && buffer[1] == 'd')
-                result = handle_cd(buffer+2);
-                else
-                result = "$$$$";
-
-                send(newsockfd, result, strlen(result)+1, 0);
-            }
-            exit(0);
+            printf("Hope you have liked the experience.Bye!\n");
+            break;
         }
         
-        close(newsockfd);
-    }   
+        idx = 0;
+        while(1)                                                // For receiving result from server
+        {
+            temp_buf = (char*)malloc(CHUNKSIZE * sizeof(char));
+            cnt = recv(sockfd, temp_buf, CHUNKSIZE, 0);
+            if(cnt <= 0)                                       // if server socket gets closed or some error in recv
+            {
+                printf("Error in receiving result from server...\n");
+                exit(0);
+            }
 
+            for(int i = 0; i < cnt; i++)
+            buffer[idx++] = temp_buf[i];
+            free(temp_buf);
+
+            if(buffer[idx-1] == '\0')
+            break;
+        }
+        // printf("Result from server : %s %d\n", buffer, (int)strlen(buffer));
+        if(strcmp(buffer, "####") == 0)
+        printf("Error in running command...\n");
+        else if(strcmp(buffer, "$$$$") == 0)
+        printf("Invalid Command!\n");
+        else if(strlen(buffer) > 0)
+        printf("%s\n", buffer);
+
+    }
+    
+    free(buffer);
     close(sockfd);
     return 0;
 }
