@@ -33,11 +33,18 @@ char* handle_pwd(char* argument)
 void handle_dir(int newsockfd, char* argument)
 {
     char *temp_buf = (char*)malloc(sizeof(char) * MAXSIZE);
-
+    int totalSent = 0, temp;
     if(argument[0] != ' ' && argument[0] != '\t' && argument[0] != '\0')    // Invalid command with dir as prefix
     {
         strcpy(temp_buf, "$$$$");
-        send(newsockfd, temp_buf, 5, 0);
+        totalSent = 0;
+        while(1)
+        {
+            temp = send(newsockfd, temp_buf+totalSent, 5-totalSent, 0);
+            totalSent += temp;
+            if(totalSent == 5)
+            break;
+        }
         return;
     }
 
@@ -55,7 +62,14 @@ void handle_dir(int newsockfd, char* argument)
     if(dr == NULL)                                                          // In case of error
     {
         strcpy(temp_buf, "####");
-        send(newsockfd, temp_buf, 5, 0);
+        totalSent = 0;
+        while(1)
+        {
+            temp = send(newsockfd, temp_buf+totalSent, 5-totalSent, 0);
+            totalSent += temp;
+            if(totalSent == 5)
+            break;
+        }
         return;
     }
     
@@ -72,7 +86,14 @@ void handle_dir(int newsockfd, char* argument)
         {
             if(i*CHUNKSIZE >= cnt)                                          // Checking if we have already sent the whole buffer in prev iteration
             break;  
-            send(newsockfd, temp_buf, findMin(cnt-i*CHUNKSIZE, CHUNKSIZE), 0);
+            totalSent = 0;
+            while(1)
+            {
+                temp = send(newsockfd, temp_buf+totalSent+i*CHUNKSIZE, findMin(cnt-i*CHUNKSIZE, CHUNKSIZE)-totalSent, 0);
+                totalSent += temp;
+                if(totalSent == findMin(cnt-i*CHUNKSIZE, CHUNKSIZE))
+                break;
+            }
         }  
         free(temp_buf);
     }
@@ -130,7 +151,7 @@ int main()
 
     listen(sockfd, 5);                                                      // Atmost 5 clients can be queued while server is running
 
-    int cliLength, temp, idx, cnt, totalSent; char validUser;
+    int cliLength, temp, idx, cnt, totalSent, totalrecv; char validUser;
     char* temp_buf = (char*)malloc(CHUNKSIZE * sizeof(char));
     char* result; 
     while(1)
@@ -144,8 +165,24 @@ int main()
         if(fork() == 0)                                                     // Child process will interact with client & parent process is still there to accept from other clients 
         {
             strcpy(buffer, "LOGIN:");
-            temp = send(newsockfd, buffer, strlen(buffer)+1, 0);            // Sending Login message
-            temp = recv(newsockfd, buffer, MAXSIZE, 0);                     // Receiving username from client
+            totalSent = 0;
+            while(1)
+            {
+                temp = send(newsockfd, buffer+totalSent, strlen(buffer)+1-totalSent, 0);         // Sending Login message
+                totalSent += temp;
+                if(totalSent == strlen(buffer)+1)
+                break;
+            }
+
+            totalrecv = 0;
+            while(1)
+            {
+                temp = recv(newsockfd, buffer+totalrecv, MAXSIZE-totalrecv, 0);                  // Receiving username from client
+                totalrecv += temp;
+                if(buffer[totalrecv-1] == '\0')
+                break;
+            }
+
             printf("Username received from client : %s\n", buffer);
 
             validUser = 'f'; 
@@ -171,12 +208,29 @@ int main()
             {
                 printf("Invalid User\n");
                 strcpy(buffer, "NOT-FOUND");
-                temp = send(newsockfd, buffer, strlen(buffer)+1, 0);
+                
+                totalSent = 0;
+                while(1)
+                {
+                    temp = send(newsockfd, buffer+totalSent, strlen(buffer)+1-totalSent, 0);     // Sending Login message
+                    totalSent += temp;
+                    if(totalSent == strlen(buffer)+1)
+                    break;
+                }
+
                 exit(0);
             }
             printf("Valid User\n");
             strcpy(buffer, "FOUND");
-            temp = send(newsockfd, buffer, strlen(buffer)+1, 0);            
+
+            totalSent = 0;
+            while(1)
+            {
+                temp = send(newsockfd, buffer+totalSent, strlen(buffer)+1-totalSent, 0);        // Sending Login message
+                totalSent += temp;
+                if(totalSent == strlen(buffer)+1)
+                break;
+            }           
 
             while(1)
             {
@@ -225,7 +279,7 @@ int main()
                     {
                         temp = send(newsockfd, result+totalSent+CHUNKSIZE*i, findMin(CHUNKSIZE, cnt-i*CHUNKSIZE)-totalSent, 0);
                         totalSent += temp;
-                        if(totalSent == findMin(CHUNKSIZE, cnt-i*CHUNKSIZE))                       // Keep sending until total no. of char sent become equal to cntChars
+                        if(totalSent == findMin(CHUNKSIZE, cnt-i*CHUNKSIZE))    // Keep sending until total no. of char sent become equal to cntChars
                         break;
                     }
                 }  
