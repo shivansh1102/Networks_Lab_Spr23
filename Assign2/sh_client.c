@@ -46,7 +46,8 @@ int main()
     }
 
     printf("%s ", buffer);                                      // print "LOGIN:"
-    scanf("%s", buffer); getchar();                                    // Taking username as input
+    scanf("%s", buffer);                                        // Taking username as input
+    getchar();                                                  // to take '\n' which otherwise would affect later
     buffer[strlen(buffer)] = '\0';
     temp = send(sockfd, buffer, strlen(buffer)+1, 0);           // Sending username to server 
     temp = recv(sockfd, buffer, MAXSIZE, 0);                    // Receiving verification message from server
@@ -63,7 +64,7 @@ int main()
         len = 0;
         printf("Enter command > ");
         cnt = getline(&temp_buf, &len, stdin);                  // Taking command as input from user
-        // printf("%d\n", cnt);
+        
         for(int i = 0; i < cnt-1; i++)
         buffer[i] = temp_buf[i];
         buffer[cnt-1] = '\0';
@@ -89,32 +90,42 @@ int main()
             break;
         }
         
-        idx = 0;
         while(1)                                                // For receiving result from server
         {
-            temp_buf = (char*)malloc(CHUNKSIZE * sizeof(char));
+            temp_buf = (char*)calloc(CHUNKSIZE, sizeof(char));
             cnt = recv(sockfd, temp_buf, CHUNKSIZE, 0);
-            if(cnt <= 0)                                       // if server socket gets closed or some error in recv
+            
+            if(cnt <= 0)                                        // if server socket gets closed or some error in recv
             {
                 printf("Error in receiving result from server...\n");
                 exit(0);
             }
-
-            for(int i = 0; i < cnt; i++)
-            buffer[idx++] = temp_buf[i];
-            free(temp_buf);
-
-            if(buffer[idx-1] == '\0')
+            
+            if(cnt == 5)
+            {
+                if(temp_buf[0] == '#' && temp_buf[1] == '#' && temp_buf[2] == '#' && temp_buf[3] == '#' && temp_buf[4] == '\0')
+                {
+                    printf("Error in running command...");
+                    break;
+                }
+                else if(temp_buf[0] == '$' && temp_buf[1] == '$' && temp_buf[2] == '$' && temp_buf[3] == '$' && temp_buf[4] == '\0')
+                {
+                    printf("Invalid Command!");
+                    break;
+                }
+                else
+                printf("%s", temp_buf);
+            }
+            else                                                // Printing chunk of result as soon as we received it from server
+            printf("%s", temp_buf);
+            
+            if(temp_buf[cnt-1] == '\0')
             break;
-        }
-        // printf("Result from server : %s %d\n", buffer, (int)strlen(buffer));
-        if(strcmp(buffer, "####") == 0)
-        printf("Error in running command...\n");
-        else if(strcmp(buffer, "$$$$") == 0)
-        printf("Invalid Command!\n");
-        else if(strlen(buffer) > 0)
-        printf("%s\n", buffer);
 
+            free(temp_buf);
+        }
+        free(temp_buf);
+        printf("\n");
     }
     
     free(buffer);
