@@ -47,7 +47,7 @@ int main()
 
         time_t timeVar = time(NULL);
 		struct tm* local = localtime(&timeVar);             // Getting local time & data from system
-        // sleep(5);                                        // For testing
+        // sleep(10);                                        // For testing
 		strcpy(buffer, asctime(local));                     // copying current date and time in buffer
 
         sendto(sockfd, buffer, strlen(buffer)+1, 0, (struct sockaddr*) &cliAddr, cliLength);

@@ -37,8 +37,15 @@ int main()
     }
     printf("Connected to server...\n");
 
-    int temp;
-    temp = recv(sockfd, buffer, sizeof(buffer), 0);
+    int temp, totalrecv = 0, totalSent = 0;
+    while(1)
+    {
+        temp = recv(sockfd, buffer+totalrecv, sizeof(buffer)-totalrecv, 0);
+        totalrecv += temp;
+        if(buffer[totalrecv-1] == '\0')
+        break;
+    }
+
     if(temp <= 0)                                               // if server socket gets closed or some error in recv
     {
         printf("Error in receiving message from server...\n");
@@ -49,8 +56,24 @@ int main()
     scanf("%s", buffer);                                        // Taking username as input
     getchar();                                                  // to take '\n' which otherwise would affect later
     buffer[strlen(buffer)] = '\0';
-    temp = send(sockfd, buffer, strlen(buffer)+1, 0);           // Sending username to server 
-    temp = recv(sockfd, buffer, MAXSIZE, 0);                    // Receiving verification message from server
+    
+    totalSent = 0;
+    while(1)
+    {
+        temp = send(sockfd, buffer+totalSent, strlen(buffer)+1-totalSent, 0);       // Sending username to server 
+        totalSent += temp;
+        if(totalSent == strlen(buffer)+1)
+        break;
+    }
+    
+    totalrecv = 0;
+    while(1)
+    {
+        temp = recv(sockfd, buffer, MAXSIZE, 0);                // Receiving verification message from server
+        totalrecv += temp;
+        if(buffer[totalrecv-1] == '\0')
+        break;
+    }
 
     if(strcmp(buffer, "NOT-FOUND") == 0)  
     {
@@ -58,7 +81,7 @@ int main()
         exit(0);
     }       
 
-    char* temp_buf; int cnt, totalSent, idx; size_t len;
+    char* temp_buf; int cnt, idx; size_t len;
     while(1)                                                    // Interacting like a shell with user
     {
         len = 0;
